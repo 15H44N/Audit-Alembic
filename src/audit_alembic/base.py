@@ -4,11 +4,7 @@ import warnings
 from datetime import datetime
 
 from alembic.operations import ops
-from sqlalchemy import CheckConstraint
-from sqlalchemy import Column
-from sqlalchemy import MetaData
-from sqlalchemy import Table
-from sqlalchemy import types
+from sqlalchemy import CheckConstraint, Column, MetaData, Table, types
 
 from . import exc
 
@@ -21,8 +17,9 @@ def alembic_supports_callback(configure_method=None):
     """
     if configure_method is None:
         from alembic import context
+
         configure_method = context.configure
-    return 'on_version_apply' in inspect.getargspec(configure_method).args
+    return "on_version_apply" in inspect.getargspec(configure_method).args
 
 
 class CommonColumnValues(object):
@@ -49,6 +46,7 @@ class CommonColumnValues(object):
         now = datetime.utcnow()
         if as_sql or (ctx is not None and ctx.as_sql):
             from alembic import op
+
             now = op.inline_literal(now.isoformat())
         return now
 
@@ -61,12 +59,11 @@ class CommonColumnValues(object):
         :raise .AuditRuntimeError: if it appears to be neither of these.
         """
         if step.is_stamp:
-            return 'stamp'
+            return "stamp"
         elif step.is_migration:
-            return 'migration'
+            return "migration"
         else:
-            raise exc.AuditRuntimeError('Unknown migration type %s'
-                                        % (step.up_revision_id))
+            raise exc.AuditRuntimeError("Unknown migration type %s" % (step.up_revision_id))
 
     @staticmethod
     def operation_direction(step=None, **_):
@@ -75,12 +72,12 @@ class CommonColumnValues(object):
         :param step: an ``alembic.runtime.migration.MigrationInfo``
         """
         if step.is_upgrade:
-            return 'up'
+            return "up"
         else:
-            return 'down'
+            return "down"
 
     @staticmethod
-    def new_alembic_version(step=None, separator='##', **_):
+    def new_alembic_version(step=None, separator="##", **_):
         """Get the after-operation alembic version.
 
         :param step: an ``alembic.runtime.migration.MigrationInfo``
@@ -90,7 +87,7 @@ class CommonColumnValues(object):
         return separator.join(step.destination_revision_ids)
 
     @staticmethod
-    def old_alembic_version(step=None, separator='##', **_):
+    def old_alembic_version(step=None, separator="##", **_):
         """Get the before-operation alembic version.
 
         :param step: an ``alembic.runtime.migration.MigrationInfo``
@@ -132,30 +129,32 @@ class Auditor(object):
 
     def __init__(self, table, make_row):
         self.table = table
-        if not (callable(make_row) or hasattr(make_row, 'items')):
-            raise exc.AuditConstructError('invalid make_rows argument')
+        if not (callable(make_row) or hasattr(make_row, "items")):
+            raise exc.AuditConstructError("invalid make_rows argument")
         self._make_row = make_row
         self.created_table = False
 
     @staticmethod
-    def version_warn(msg='null user version', stacklevel=2):
+    def version_warn(msg="null user version", stacklevel=2):
         warnings.warn(msg, exc.UserVersionWarning, stacklevel=stacklevel)
 
     @classmethod
-    def create(cls,
-               user_version,
-               user_version_nullable=False,
-               table_name='alembic_version_history',
-               metadata=None,
-               extra_columns=(),
-               user_version_column_name='user_version',
-               user_version_type=types.String(255),
-               direction_column_name='operation_direction',
-               operation_column_name='operation_type',
-               alembic_version_separator='##',
-               alembic_version_column_name='alembic_version',
-               prev_alembic_version_column_name='prev_alembic_version',
-               change_time_column_name='changed_at',):
+    def create(
+        cls,
+        user_version,
+        user_version_nullable=False,
+        table_name="alembic_version_history",
+        metadata=None,
+        extra_columns=(),
+        user_version_column_name="user_version",
+        user_version_type=types.String(255),
+        direction_column_name="operation_direction",
+        operation_column_name="operation_type",
+        alembic_version_separator="##",
+        alembic_version_column_name="alembic_version",
+        prev_alembic_version_column_name="prev_alembic_version",
+        change_time_column_name="changed_at",
+    ):
         """Autocreate a history table.
 
         This table contains columns for:
@@ -252,19 +251,17 @@ class Auditor(object):
         alembic_version_type = types.String(255)
 
         columns = [
-            Column('id', types.BIGINT().with_variant(types.Integer, 'sqlite'),
-                   primary_key=True),
+            Column("id", types.BIGINT().with_variant(types.Integer, "sqlite"), primary_key=True),
             Column(alembic_version_column_name, alembic_version_type),
             Column(prev_alembic_version_column_name, alembic_version_type),
             CheckConstraint(
-                'coalesce(%s, %s) IS NOT NULL' % (
-                    alembic_version_column_name,
-                    prev_alembic_version_column_name),
-                name='alembic_versions_nonnull'),
+                "coalesce(%s, %s) IS NOT NULL" % (alembic_version_column_name, prev_alembic_version_column_name),
+                name="alembic_versions_nonnull",
+            ),
             Column(operation_column_name, types.String(32), nullable=False),
             Column(direction_column_name, types.String(32), nullable=False),
             Column(user_version_column_name, user_version_type),
-            Column(change_time_column_name, types.DateTime())
+            Column(change_time_column_name, types.DateTime()),
         ]
 
         def alembic_vers(f):
@@ -272,8 +269,7 @@ class Auditor(object):
 
         col_vals = {
             alembic_version_column_name: alembic_vers(ccv.new_alembic_version),
-            prev_alembic_version_column_name: alembic_vers(
-                ccv.old_alembic_version),
+            prev_alembic_version_column_name: alembic_vers(ccv.old_alembic_version),
             operation_column_name: ccv.operation_type,
             direction_column_name: ccv.operation_direction,
             user_version_column_name: user_version,
@@ -282,7 +278,7 @@ class Auditor(object):
         for col, val in extra_columns:
             columns.append(col)
             if col.name in col_vals:
-                raise exc.AuditCreateError('value %s used twice' % col.name)
+                raise exc.AuditCreateError("value %s used twice" % col.name)
             col_vals[col.name] = val
 
         auditor = cls(Table(table_name, metadata, *columns), col_vals)
@@ -292,15 +288,14 @@ class Auditor(object):
         make_row = self._make_row
         if callable(make_row):
             make_row = make_row(**kw)
-        if not hasattr(make_row, 'items'):
-            raise exc.AuditRuntimeError('make_row() should return a dict, '
-                                        'instead got %r' % repr(make_row))
-        make_row = {k: v(**kw) if callable(v) else v
-                    for k, v in make_row.items()}
+        if not hasattr(make_row, "items"):
+            raise exc.AuditRuntimeError("make_row() should return a dict, " "instead got %r" % repr(make_row))
+        make_row = {k: v(**kw) if callable(v) else v for k, v in make_row.items()}
         return make_row
 
     def listen(self, ctx=None, warn_user_version=True, **kw):
         from alembic import op
+
         if not self.created_table:
             if ctx.as_sql:
                 op.invoke(ops.CreateTableOp.from_table(self.table))
