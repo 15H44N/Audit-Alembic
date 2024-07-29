@@ -4,5 +4,4 @@ from . import exc  # noqa: F401
 from .base import (
     Auditor,  # noqa: F401
     CommonColumnValues,  # noqa: F401
-    alembic_supports_callback,  # noqa: F401
 )

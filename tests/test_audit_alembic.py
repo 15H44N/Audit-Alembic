@@ -294,7 +294,7 @@ class TestAuditTable(TestBase):
     history = staticmethod(_history)
 
     def test_linear_updown_migrations(self, env, version, cmd):
-        now = str(datetime.utcnow())
+        now = str(datetime.now())
         with mock.patch("audit_alembic.test_custom_data", now):
 
             @version.iterate
@@ -310,76 +310,16 @@ class TestAuditTable(TestBase):
         assert set(h[-1] for h in history) == set((now,))
         history = [h[:-1] for h in history]
         assert history == [
-            (
-                env.R.A,
-                "",
-                "up",
-                "migration",
-                v[0],
-            ),
-            (
-                env.R.B,
-                env.R.A,
-                "up",
-                "migration",
-                v[0],
-            ),
-            (
-                env.R.C,
-                env.R.B,
-                "up",
-                "migration",
-                v[0],
-            ),
-            (
-                env.R.D,
-                env.R.C,
-                "up",
-                "migration",
-                v[0],
-            ),
-            (
-                env.R.E,
-                env.R.D,
-                "up",
-                "migration",
-                v[1],
-            ),
-            (
-                env.R.D,
-                env.R.E,
-                "down",
-                "migration",
-                v[2],
-            ),
-            (
-                env.R.C,
-                env.R.D,
-                "down",
-                "migration",
-                v[2],
-            ),
-            (
-                env.R.B,
-                env.R.C,
-                "down",
-                "migration",
-                v[2],
-            ),
-            (
-                env.R.A,
-                env.R.B,
-                "down",
-                "migration",
-                v[2],
-            ),
-            (
-                "",
-                env.R.A,
-                "down",
-                "migration",
-                v[2],
-            ),
+            (env.R.A, "", "up", "migration", v[0]),
+            (env.R.B, env.R.A, "up", "migration", v[0]),
+            (env.R.C, env.R.B, "up", "migration", v[0]),
+            (env.R.D, env.R.C, "up", "migration", v[0]),
+            (env.R.E, env.R.D, "up", "migration", v[1]),
+            (env.R.D, env.R.E, "down", "migration", v[2]),
+            (env.R.C, env.R.D, "down", "migration", v[2]),
+            (env.R.B, env.R.C, "down", "migration", v[2]),
+            (env.R.A, env.R.B, "down", "migration", v[2]),
+            ("", env.R.A, "down", "migration", v[2]),
         ]
 
     def test_merge_unmerge(self, env, version, cmd):

@@ -1,25 +1,18 @@
 import functools
 import inspect
+from typing import Any, Callable, Collection, Dict, Iterable, Mapping, Optional, Tuple
 import warnings
-from datetime import datetime
+from datetime import UTC, datetime
 
+import alembic
+import alembic.migration
 from alembic.operations import ops
-from sqlalchemy import CheckConstraint, Column, MetaData, Table, types
+import alembic.runtime
+import alembic.runtime.migration
+from alembic.runtime.migration import MigrationInfo, MigrationContext
+from sqlalchemy import CheckConstraint, Column, Connection, MetaData, Table, types
 
 from . import exc
-
-
-def alembic_supports_callback(configure_method=None):
-    """Inspect a method to tell whether it supports on_version_apply callback.
-
-    :meth:`.Auditor.setup` uses this essentially to ensure the correct version
-    of alembic is installed.
-    """
-    if configure_method is None:
-        from alembic import context
-
-        configure_method = context.configure
-    return "on_version_apply" in inspect.getargspec(configure_method).args
 
 
 class CommonColumnValues(object):
@@ -34,7 +27,7 @@ class CommonColumnValues(object):
     """
 
     @staticmethod
-    def change_time(ctx=None, as_sql=False, **_):
+    def change_time(ctx: Optional[alembic.runtime.migration.MigrationContext]=None, as_sql: bool=False, **_):
         """Returns current UTC timestamp.
 
         :param ctx: alembic.MigrationContext provided by callback. Used to
@@ -43,7 +36,7 @@ class CommonColumnValues(object):
             literal. This uses `alembic.op.inline_literal` so it may cause
             trouble if used outside of a migration script.
         """
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         if as_sql or (ctx is not None and ctx.as_sql):
             from alembic import op
 
@@ -51,7 +44,7 @@ class CommonColumnValues(object):
         return now
 
     @staticmethod
-    def operation_type(step=None, **_):
+    def operation_type(step: MigrationInfo, **_):
         """The type of operation being completed, "stamp" or "migration".
 
         :param step: an ``alembic.runtime.migration.MigrationInfo``
@@ -66,7 +59,7 @@ class CommonColumnValues(object):
             raise exc.AuditRuntimeError("Unknown migration type %s" % (step.up_revision_id))
 
     @staticmethod
-    def operation_direction(step=None, **_):
+    def operation_direction(step: MigrationInfo, **_):
         """The direction of the operation, "up" or "down"
 
         :param step: an ``alembic.runtime.migration.MigrationInfo``
@@ -77,7 +70,7 @@ class CommonColumnValues(object):
             return "down"
 
     @staticmethod
-    def new_alembic_version(step=None, separator="##", **_):
+    def new_alembic_version(step: MigrationInfo, separator: str = "##", **_):
         """Get the after-operation alembic version.
 
         :param step: an ``alembic.runtime.migration.MigrationInfo``
@@ -87,7 +80,7 @@ class CommonColumnValues(object):
         return separator.join(step.destination_revision_ids)
 
     @staticmethod
-    def old_alembic_version(step=None, separator="##", **_):
+    def old_alembic_version(step: MigrationInfo, separator: str = "##", **_):
         """Get the before-operation alembic version.
 
         :param step: an ``alembic.runtime.migration.MigrationInfo``
@@ -127,9 +120,9 @@ class Auditor(object):
         input for its corresponding column.
     """
 
-    def __init__(self, table, make_row):
+    def __init__(self, table: Table, make_row: Dict[str,Any]):
         self.table = table
-        if not (callable(make_row) or hasattr(make_row, "items")):
+        if not (callable(make_row) or isinstance(make_row, dict)):
             raise exc.AuditConstructError("invalid make_rows argument")
         self._make_row = make_row
         self.created_table = False
@@ -141,19 +134,19 @@ class Auditor(object):
     @classmethod
     def create(
         cls,
-        user_version,
-        user_version_nullable=False,
-        table_name="alembic_version_history",
-        metadata=None,
-        extra_columns=(),
-        user_version_column_name="user_version",
-        user_version_type=types.String(255),
-        direction_column_name="operation_direction",
-        operation_column_name="operation_type",
-        alembic_version_separator="##",
-        alembic_version_column_name="alembic_version",
-        prev_alembic_version_column_name="prev_alembic_version",
-        change_time_column_name="changed_at",
+        user_version: Any,
+        user_version_nullable: bool = False,
+        table_name: str = "alembic_version_history",
+        metadata: Optional[MetaData]=None,
+        extra_columns: Iterable[Tuple[Column, Any]]=(),
+        user_version_column_name: str = "user_version",
+        user_version_type: types.String = types.String(255),
+        direction_column_name: str = "operation_direction",
+        operation_column_name: str = "operation_type",
+        alembic_version_separator: str = "##",
+        alembic_version_column_name: str = "alembic_version",
+        prev_alembic_version_column_name: str = "prev_alembic_version",
+        change_time_column_name: str = "changed_at",
     ):
         """Autocreate a history table.
 
@@ -288,18 +281,20 @@ class Auditor(object):
         make_row = self._make_row
         if callable(make_row):
             make_row = make_row(**kw)
-        if not hasattr(make_row, "items"):
+        if not isinstance(make_row, dict):
             raise exc.AuditRuntimeError("make_row() should return a dict, " "instead got %r" % repr(make_row))
         make_row = {k: v(**kw) if callable(v) else v for k, v in make_row.items()}
         return make_row
 
-    def listen(self, ctx=None, warn_user_version=True, **kw):
+    def listen(self, ctx: MigrationContext, info: Optional[MigrationInfo]=None, heads: Optional[Collection[Any]] = None, **run_args):
         from alembic import op
 
         if not self.created_table:
+            assert isinstance(ctx.connection, Connection)
             if ctx.as_sql:
                 op.invoke(ops.CreateTableOp.from_table(self.table))
             else:
                 self.table.create(ctx.connection, checkfirst=True)
             self.created_table = True
-        op.bulk_insert(self.table, [self.make_row(ctx=ctx, **kw)])
+
+        op.bulk_insert(self.table, [self.make_row(ctx=ctx, **run_args)])
