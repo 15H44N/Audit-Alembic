@@ -27,7 +27,7 @@ class CommonColumnValues(object):
     """
 
     @staticmethod
-    def change_time(ctx: Optional[alembic.runtime.migration.MigrationContext]=None, as_sql: bool=False, **_):
+    def change_time(ctx: Optional[alembic.runtime.migration.MigrationContext] = None, as_sql: bool=False, **_):
         """Returns current UTC timestamp.
 
         :param ctx: alembic.MigrationContext provided by callback. Used to
@@ -120,7 +120,7 @@ class Auditor(object):
         input for its corresponding column.
     """
 
-    def __init__(self, table: Table, make_row: Dict[str,Any]):
+    def __init__(self, table: Table, make_row: None|Dict[str,Any]|Callable[...,Dict[str,Any]]):
         self.table = table
         if not (callable(make_row) or isinstance(make_row, dict)):
             raise exc.AuditConstructError("invalid make_rows argument")
@@ -232,11 +232,14 @@ class Auditor(object):
             elif callable(user_version):
                 orig_user_version = user_version
 
-                def user_version(**kw):
+                def _user_version(**kw):
                     val = orig_user_version(**kw)
                     if val is None:
                         cls.version_warn(stacklevel=1)
                     return val
+                
+                # Hide obscured declaration warning
+                user_version = _user_version
 
         if metadata is None:
             metadata = MetaData()
@@ -288,9 +291,10 @@ class Auditor(object):
 
     def listen(self, ctx: MigrationContext, info: Optional[MigrationInfo]=None, heads: Optional[Collection[Any]] = None, **run_args):
         from alembic import op
+        from sqlalchemy.engine.mock import MockConnection
 
         if not self.created_table:
-            assert isinstance(ctx.connection, Connection)
+            assert isinstance(ctx.connection, (Connection, MockConnection)), f"Not a connection: {ctx.connection}"
             if ctx.as_sql:
                 op.invoke(ops.CreateTableOp.from_table(self.table))
             else:
