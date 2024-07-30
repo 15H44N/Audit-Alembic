@@ -1,14 +1,14 @@
 import functools
-from datetime import UTC, datetime, timedelta
-import os
-from pathlib import Path
 import shutil
-from typing import Any, Callable, Dict, Optional
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Callable, Dict
 
 import audit_alembic
 import pytest
 from alembic import command as alcommand
 from alembic import util
+from alembic.script.base import ScriptDirectory
 from alembic.testing.env import (
     _get_staging_directory,
     _testing_config,
@@ -17,14 +17,12 @@ from alembic.testing.env import (
     staging_env,
 )
 from audit_alembic import exc
-from sqlalchemy import Column, Engine, MetaData, Table, inspect, types
+from sqlalchemy import Column, MetaData, Table, inspect, types
 from sqlalchemy.sql import select
 from sqlalchemy.testing import config as sqla_test_config
 from sqlalchemy.testing import mock
 from sqlalchemy.testing.fixtures import TestBase
 from sqlalchemy.testing.util import drop_all_tables
-
-from alembic.script.base import ScriptDirectory
 
 test_col_name = "custom_data"
 
@@ -64,9 +62,10 @@ sqlalchemy.url = %s
 """
 
 
-def _custom_auditor(make_row: None|Dict[str,Any]|Callable[...,Dict[str,Any]] = None):
+def _custom_auditor(make_row: None | Dict[str, Any] | Callable[..., Dict[str, Any]] = None):
     def _make_row(**_):
         return {"changed_at": audit_alembic.CommonColumnValues.change_time}
+
     make_row = make_row or _make_row
 
     custom_table = Table(
@@ -272,7 +271,6 @@ def cmd():
 
 def _history():
     table = audit_alembic.test_auditor.table
-    Engine
     q = select(
         *[
             table.c.alembic_version,
@@ -334,7 +332,10 @@ class TestAuditTable(TestBase):
         assert penult[4] == v[0]
         assert last[2] == "down"
         assert last[4] == v[1]
-        assert _multiequal((env.get_revision("E_").revision, env.get_revision("E0_").revision), penult[1], last[0]) is not None
+        assert (
+            _multiequal((env.get_revision("E_").revision, env.get_revision("E0_").revision), penult[1], last[0])
+            is not None
+        )
 
     def test_stamp_no_dupe(self, env, version, cmd):
         @version.iterate
@@ -359,7 +360,13 @@ class TestAuditTable(TestBase):
 
         upgr, stdown, stup = self.history()[-3:]
         assert upgr[0] == env.get_revision("H_").revision
-        assert _multiequal((env.get_revision("G_").revision, env.get_revision("G2_").revision, env.get_revision("G4_").revision), upgr[1]) is not None
+        assert (
+            _multiequal(
+                (env.get_revision("G_").revision, env.get_revision("G2_").revision, env.get_revision("G4_").revision),
+                upgr[1],
+            )
+            is not None
+        )
         assert upgr[2:] == ("up", "migration", v[0], None)
         assert stdown == (env.get_revision("G_").revision, env.get_revision("H_").revision, "down", "stamp", v[1], None)
         assert stup == (env.get_revision("H_").revision, env.get_revision("G_").revision, "up", "stamp", v[2], None)
@@ -389,7 +396,14 @@ class TestAuditTable(TestBase):
             yield
             cmd.stamp(env.get_revision("D_").revision)
 
-        assert self.history()[-1] == (env.get_revision("D_").revision, env.get_revision("E_").revision, "down", "stamp", v[2], None)
+        assert self.history()[-1] == (
+            env.get_revision("D_").revision,
+            env.get_revision("E_").revision,
+            "down",
+            "stamp",
+            v[2],
+            None,
+        )
 
     def test_branches(self, env: ScriptDirectory, version, cmd):
         @version.iterate
@@ -404,14 +418,31 @@ class TestAuditTable(TestBase):
 
         history = [x[:-1] for x in self.history()]
 
-        assert _find(history, (env.get_revision("D_").revision, env.get_revision("C_").revision, "up", "migration", v[0]), True) is not None
+        assert (
+            _find(
+                history,
+                (env.get_revision("D_").revision, env.get_revision("C_").revision, "up", "migration", v[0]),
+                True,
+            )
+            is not None
+        )
 
-        assert _find(history, (env.get_revision("C_").revision, env.get_revision("D_").revision, "down", "migration", v[1]), True) == 0
+        assert (
+            _find(
+                history,
+                (env.get_revision("C_").revision, env.get_revision("D_").revision, "down", "migration", v[1]),
+                True,
+            )
+            == 0
+        )
         assert all(x[2] == "up" for x in history)
         # no more checking direction or custom data
         history = [x[:2] + x[3:] for x in history]
 
-        assert _find(history, (env.get_revision("E1_").revision, env.get_revision("C_").revision, "stamp", v[2]), True) == 0
+        assert (
+            _find(history, (env.get_revision("E1_").revision, env.get_revision("C_").revision, "stamp", v[2]), True)
+            == 0
+        )
         assert all(x[2] == "migration" for x in history)
         assert all(x[-1] == v[3] for x in history)
         # no more checking type or revision
@@ -437,7 +468,9 @@ class TestSqlMode(TestBase):
             return expression.lower().startswith("create table alembic_version_history")
 
         def has_insert(expression: str):
-            return env.get_revision("A_").revision in expression and expression.lower().startswith("insert into alembic_version_history ")
+            return env.get_revision("A_").revision in expression and expression.lower().startswith(
+                "insert into alembic_version_history "
+            )
 
         assert _find(out, has_create, True) is not None, "create table statement not found"
         assert _find(out, has_create) is None, "duplicate create table statement found"

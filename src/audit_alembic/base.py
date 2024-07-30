@@ -1,15 +1,14 @@
 import functools
-import inspect
-from typing import Any, Callable, Collection, Dict, Iterable, Mapping, Optional, Tuple
 import warnings
 from datetime import UTC, datetime
+from typing import Any, Callable, Collection, Dict, Iterable, Optional, Tuple
 
 import alembic
 import alembic.migration
-from alembic.operations import ops
 import alembic.runtime
 import alembic.runtime.migration
-from alembic.runtime.migration import MigrationInfo, MigrationContext
+from alembic.operations import ops
+from alembic.runtime.migration import MigrationContext, MigrationInfo
 from sqlalchemy import CheckConstraint, Column, Connection, MetaData, Table, types
 
 from . import exc
@@ -27,7 +26,7 @@ class CommonColumnValues(object):
     """
 
     @staticmethod
-    def change_time(ctx: Optional[alembic.runtime.migration.MigrationContext] = None, as_sql: bool=False, **_):
+    def change_time(ctx: Optional[alembic.runtime.migration.MigrationContext] = None, as_sql: bool = False, **_):
         """Returns current UTC timestamp.
 
         :param ctx: alembic.MigrationContext provided by callback. Used to
@@ -120,7 +119,7 @@ class Auditor(object):
         input for its corresponding column.
     """
 
-    def __init__(self, table: Table, make_row: None|Dict[str,Any]|Callable[...,Dict[str,Any]]):
+    def __init__(self, table: Table, make_row: None | Dict[str, Any] | Callable[..., Dict[str, Any]]):
         self.table = table
         if not (callable(make_row) or isinstance(make_row, dict)):
             raise exc.AuditConstructError("invalid make_rows argument")
@@ -137,8 +136,8 @@ class Auditor(object):
         user_version: Any,
         user_version_nullable: bool = False,
         table_name: str = "alembic_version_history",
-        metadata: Optional[MetaData]=None,
-        extra_columns: Iterable[Tuple[Column, Any]]=(),
+        metadata: Optional[MetaData] = None,
+        extra_columns: Iterable[Tuple[Column, Any]] = (),
         user_version_column_name: str = "user_version",
         user_version_type: types.String = types.String(255),
         direction_column_name: str = "operation_direction",
@@ -237,7 +236,7 @@ class Auditor(object):
                     if val is None:
                         cls.version_warn(stacklevel=1)
                     return val
-                
+
                 # Hide obscured declaration warning
                 user_version = _user_version
 
@@ -289,7 +288,13 @@ class Auditor(object):
         make_row = {k: v(**kw) if callable(v) else v for k, v in make_row.items()}
         return make_row
 
-    def listen(self, ctx: MigrationContext, info: Optional[MigrationInfo]=None, heads: Optional[Collection[Any]] = None, **run_args):
+    def listen(
+        self,
+        ctx: MigrationContext,
+        info: Optional[MigrationInfo] = None,
+        heads: Optional[Collection[Any]] = None,
+        **run_args,
+    ):
         from alembic import op
         from sqlalchemy.engine.mock import MockConnection
 
