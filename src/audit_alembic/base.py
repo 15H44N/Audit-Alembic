@@ -1,7 +1,7 @@
 import functools
 import warnings
 from datetime import UTC, datetime
-from typing import Any, Callable, Collection, Dict, Iterable, Optional, Tuple
+from typing import Any, Callable, Collection, Dict, Iterable, Mapping, Optional, Tuple
 
 import alembic
 import alembic.migration
@@ -259,7 +259,7 @@ class Auditor(object):
             Column(change_time_column_name, types.DateTime()),
         ]
 
-        def alembic_vers(f):
+        def alembic_vers(f: Callable[..., Any]):
             return functools.partial(f, separator=alembic_version_separator)
 
         col_vals = {
@@ -291,9 +291,9 @@ class Auditor(object):
     def listen(
         self,
         ctx: MigrationContext,
-        info: Optional[MigrationInfo] = None,
-        heads: Optional[Collection[Any]] = None,
-        **run_args,
+        step: Optional[MigrationInfo],
+        heads: Optional[Collection[Any]],
+        run_args: Mapping[str, Any],
     ):
         from alembic import op
         from sqlalchemy.engine.mock import MockConnection
@@ -306,4 +306,4 @@ class Auditor(object):
                 self.table.create(ctx.connection, checkfirst=True)
             self.created_table = True
 
-        op.bulk_insert(self.table, [self.make_row(ctx=ctx, **run_args)])
+        op.bulk_insert(self.table, [self.make_row(ctx=ctx, step=step, heads=heads, **run_args)])
