@@ -256,7 +256,7 @@ class Auditor(object):
             Column(operation_column_name, types.String(32), nullable=False),
             Column(direction_column_name, types.String(32), nullable=False),
             Column(user_version_column_name, user_version_type),
-            Column(change_time_column_name, types.DateTime()),
+            Column(change_time_column_name, types.DateTime(timezone=True)),
         ]
 
         def alembic_vers(f: Callable[..., Any]):
